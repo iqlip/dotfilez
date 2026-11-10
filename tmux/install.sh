@@ -40,7 +40,7 @@ usage() {
 Usage: ./install.sh [options]
 
 Options:
-  --skip-packages   do not install apt packages
+  --skip-packages   do not install packages (apt or pacman)
   --skip-font       do not install $FONT_NAME
   -h, --help        show this help
 
@@ -84,9 +84,8 @@ printf '%ssource: %s%s\n' "$DIM" "$SRC" "$RESET"
 step "Packages"
 if (( SKIP_PACKAGES )); then
   skip "skipped (--skip-packages)"
-elif ! command -v apt-get >/dev/null 2>&1; then
-  warn "apt-get not found. Install these yourself: ${PACKAGES[*]}"
-else
+elif command -v apt-get >/dev/null 2>&1; then
+  # Debian, Ubuntu, Kali
   to_install=()
   for p in "${PACKAGES[@]}"; do
     if ! dpkg -s "$p" >/dev/null 2>&1; then to_install+=("$p"); fi
@@ -94,11 +93,28 @@ else
   if (( ${#to_install[@]} == 0 )); then
     skip "all packages already installed"
   else
-    printf '    installing: %s\n' "${to_install[*]}"
+    printf '    installing with apt: %s\n' "${to_install[*]}"
     sudo apt-get update -qq
     sudo apt-get install -y "${to_install[@]}"
     ok "packages installed"
   fi
+elif command -v pacman >/dev/null 2>&1; then
+  # Arch, Manjaro, EndeavourOS
+  to_install=()
+  for p in "${PACKAGES[@]}"; do
+    if ! pacman -Qi "$p" >/dev/null 2>&1; then to_install+=("$p"); fi
+  done
+  if (( ${#to_install[@]} == 0 )); then
+    skip "all packages already installed"
+  else
+    printf '    installing with pacman: %s\n' "${to_install[*]}"
+    if ! sudo pacman -S --needed --noconfirm "${to_install[@]}"; then
+      die "pacman could not install the packages. Update the system first (sudo pacman -Syu), then run this again."
+    fi
+    ok "packages installed"
+  fi
+else
+  warn "no supported package manager (apt, pacman). Install these yourself: ${PACKAGES[*]}"
 fi
 
 # ---- 2. tmux config ----------------------------------------
